@@ -252,16 +252,75 @@ $ typst query --map doc.typ | head
 ./
 ├── latexmkrc            # $pdflatex override, poll shim, compile+retry
 ├── main.tex             # stub main document (never compiled)
-├── typst-…-linux-gnu.tar.gz   # typst built for glibc 2.39, patched with --map
-├── pollshim.so          # makes poll(2) return EINVAL
+├── main.typ.tex         # the document (plain typst)
 ├── synctex-gen.txt      # perl: typst query --map → output.synctex.gz
-├── typst-packages/      # vendored @preview packages (no network in sandbox)
-├── main.typ.txt         # the document (plain typst)
-└── typst-query-map.patch # the --map patch, applies to typst v0.15.1
+├── typst-query-map.patch # the --map patch, applies to typst v0.15.1
+├── pollshim.c           # source of pollshim.so (LD_PRELOAD shim)
+├── Makefile             # make blobs | make build-blobs (binary blobs live in Releases)
+└── typst-packages/      # vendored @preview packages (no network in sandbox)
 ```
 
-In Overleaf: PDF renders from Typst, click any word → jumps to its source
-line in `content.typ.txt`. Both directions work.
+The two binary blobs (`typst-x86_64-unknown-linux-gnu.tar.gz`, `pollshim.so`)
+live in the GitHub Releases, not the repo — `make blobs` downloads them,
+`make build-blobs` rebuilds them from `typst-query-map.patch` + `pollshim.c`.
+
+The sources are named `.typ.tex` (not `.typ.txt`) on purpose: Overleaf's
+PDF viewer only enables the forward-search (→) button for `.tex` files.
+With `.txt` the reverse direction worked but the button stayed greyed out.
+
+In Overleaf: PDF renders from Typst; click any word → jumps toward its
+source. Reverse (PDF → source) and forward (source → PDF) both work.
+
+**Mapping is not perfect.** Most words land on their exact source line,
+but some only get close — worst case, the jump lands at the start of the
+paragraph the word belongs to. The synctex boxes are per text run
+(`typst query --map` emits one record per run), and runs reflow across
+wrapped lines, so a run's box can cover a range that the viewer resolves
+coarsely. Good enough to edit with; not a debugger.
+
+## Update (2026-08-17): the editor bites back
+
+Putting the hack into daily use surfaced three more issues.
+
+**Forward search is disabled for non-`.tex` files.** With `main.typ.txt`
+and `content.typ.txt`, reverse search (click PDF → jump to source) worked,
+but the → button in the editor stayed greyed out. Overleaf's viewer keys
+source navigation off the file extension. Renaming to `.typ.tex` fixed it
+— the files are still Typst, they just end in `.tex` so the editor treats
+them as sources. The rename is cosmetic; typst does not care about
+extensions, and `latexmkrc`/`synctex-gen.txt` just had to follow.
+
+**A stale `/tmp` segfaulted the compile.** The first runs after the rename
+showed a silent `Segmentation fault (core dumped)` in the log, every time,
+between the copy step and the compile. Instrumenting the `$pdflatex` chain
+with step markers (echo `### step ...` into `output.log`, plus `rc=$?`
+captures) narrowed it to the `cp`/`chmod` steps. Root cause: the chain
+`export LD_PRELOAD=/tmp/pollshim.so` ran *before* `cp pollshim.so
+/tmp/pollshim.so`. In a container whose `/tmp` already held the shim from
+an earlier compile, the cp process itself had the shim loaded — and was
+overwriting the very file it was running from. Truncating a loaded, mapped
+`.so` is not usually fatal, but here it was. The fix:
+
+- `rm -f /tmp/typst /tmp/pollshim.so` at the start (no stale state),
+- copy the shim into `/tmp` *before* any LD_PRELOAD child runs,
+- scope `LD_PRELOAD=...` to the individual typst invocation instead of
+  exporting it for the whole chain.
+
+Scoping had a catch: `synctex-gen.txt` runs its own `typst query --map`,
+and without the shim that process aborts with `SIGABRT` (rc=134) — the
+original poll(2) problem, resurfacing in the second process. The shim must
+wrap the generator's typst call too.
+
+**`statx` is not in the allowlist.** The sandbox's seccomp profile allows
+`stat`, `fstat`, and `newfstatat`, but not `statx` (164 syscalls total).
+Modern coreutils `ls` uses `statx`, so the debug `ls -la output.pdf` line
+in `latexmkrc` could never succeed — it printed
+`ls: output.pdf: Operation not permitted` on every compile. Dropped the
+line; `test -s` + `COMPILE_OK` already prove the PDF exists.
+
+Step-marker instrumentation was the debugging tool that paid for itself
+three times over. `### step N` lines in `output.log`, with `rc=$?` after
+each command, turn a scrambled-looking sandbox log into a bisection grid.
 
 ## Lessons
 
