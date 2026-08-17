@@ -284,6 +284,48 @@ line in `content.typ.txt`. Both directions work.
 6. **A blog post's worth of debugging boils down to: emulator, strace, and
    reading the source.**
 
+## Related work
+
+We searched (via Perplexity, 2026-08) for similar projects. Three clusters:
+
+**Typst + Overleaf directly:**
+
+- [Overleaf PR #1385 — "Typst support"](https://github.com/overleaf/overleaf/pull/1385):
+  an open upstream attempt to add Typst as a first-class compiler. Closest
+  match to this project; verified live on GitHub. As of writing it is still
+  open.
+
+**Source navigation (SyncTeX for Typst):**
+
+- [typst/typst issue #289](https://github.com/typst/typst/issues/289) — the
+  official feature request for SyncTeX-like forward/reverse search.
+- [typst/typst discussion #861](https://github.com/typst/typst/discussions/861) —
+  design discussion; the Typst web app already has partial navigation.
+- [Quarto-Tinymist Bidirectional Search](https://marketplace.visualstudio.com/items?itemName=Prof-LonghaiLi.qmd2typ-pro)
+  — working word-level PDF↔source jumps built on [Tinymist](https://github.com/Myriad-Dreamin/tinymist),
+  the Typst LSP/preview ecosystem.
+
+**Alternative architecture (browser-side compile):**
+
+- [TeXlyre](https://github.com/TeXlyre/texlyre) — local-first LaTeX & Typst
+  editor; compiles in-browser via [typst.ts](https://github.com/Myriad-Dreamin/typst.ts)
+  (WASM). No sandbox fighting needed.
+
+**Sandbox/compiler-override precedents:**
+
+- [overleaf/toolkit issue #237](https://github.com/overleaf/toolkit/issues/237)
+  — compiler works manually but fails through the compile service; same
+  failure class as our seccomp fight.
+- [Sandboxed compiles docs](https://docs.overleaf.com/on-premises/configuration/overleaf-toolkit/server-pro-only-configuration/sandboxed-compiles),
+  [Server Pro wiki](https://github.com/overleaf/overleaf/wiki/Server-Pro:-Sandboxed-Compiles),
+  [issue #1355](https://github.com/overleaf/overleaf/issues/1355), and
+  [CVE-2024-45313](https://nvd.nist.gov/vuln/detail/cve-2024-45313) — the
+  isolation architecture we reverse-engineered, in public.
+
+As of this search, nobody appears to have documented the specific failure
+mode this project solves — the `poll(2)` seccomp abort and the LD_PRELOAD
+shim around it.
+
 ---
 
 *This is an unsupported hack. Overleaf can change the sandbox at any time —
