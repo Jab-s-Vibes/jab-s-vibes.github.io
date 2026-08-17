@@ -278,7 +278,7 @@ paragraph the word belongs to. The synctex boxes are per text run
 wrapped lines, so a run's box can cover a range that the viewer resolves
 coarsely. Good enough to edit with; not a debugger.
 
-## Update (2026-08-17): the editor bites back
+## Update: the editor bites back
 
 Putting the hack into daily use surfaced three more issues.
 
@@ -345,7 +345,7 @@ each command, turn a scrambled-looking sandbox log into a bisection grid.
 
 ## Related work
 
-We searched (via Perplexity, 2026-08) for similar projects. Three clusters:
+We searched (via Perplexity) for similar projects. Three clusters:
 
 **Typst + Overleaf directly:**
 
